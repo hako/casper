@@ -33,30 +33,30 @@ const (
 
 // Casper error variables.
 var (
-	casperParseError = CasperError{Err: "casper: CasperParseError"}
-	casperHTTPError  = CasperError{Err: "casper: CasperHTTPError"}
+	casperParseError = Error{Err: "casper: CasperParseError"}
+	casperHTTPError  = Error{Err: "casper: CasperHTTPError"}
 )
 
 // Casper holds credentials to be used when connecting to the Casper API.
 type Casper struct {
-	ApiKey         string
-	ApiSecret      string
+	APIKey         string
+	APISecret      string
 	Username       string
 	GoogleMail     string
 	GooglePassword string
 	Debug          bool
 }
 
-// CasperError handles errors returned by casper methods.
-type CasperError struct {
+// Error handles errors returned by casper methods.
+type Error struct {
 	Err    string
 	Reason error
 }
 
 // Error is a function which CasperError satisfies.
 // It returns a properly formatted error message when an error occurs.
-func (ce CasperError) Error() string {
-	return fmt.Sprintf("%s\nReason: %s", ce.Err, ce.Reason.Error())
+func (e Error) Error() string {
+	return fmt.Sprintf("%s\nReason: %s", e.Err, e.Reason.Error())
 }
 
 // GenerateRequestSignature creates a Casper API request signature.
@@ -82,7 +82,7 @@ func (c *Casper) GenerateRequestSignature(params url.Values, endpoint, signature
 	return "v1:" + hex.EncodeToString(mac.Sum(nil))
 }
 
-//	GetAttestation fetches a valid Google attestation using the Casper API.
+// GetAttestation fetches a valid Google attestation using the Casper API.
 func (c *Casper) GetAttestation(timestamp, password string) (string, error) {
 	var tr *http.Transport
 
@@ -108,11 +108,11 @@ func (c *Casper) GetAttestation(timestamp, password string) (string, error) {
 	clientAuthForm.Add("timestamp", timestamp)
 	clientAuthForm.Add("snapchat_version", SnapchatVersion)
 
-	casperSignature := c.GenerateRequestSignature(clientAuthForm, CasperAttestationCreateBinaryURL, c.ApiSecret)
+	casperSignature := c.GenerateRequestSignature(clientAuthForm, CasperAttestationCreateBinaryURL, c.APISecret)
 
 	req, err := http.NewRequest("GET", CasperAttestationCreateBinaryURL, nil)
 	req.Header.Set("User-Agent", "CasperGoAPIClient/1.1")
-	req.Header.Set("X-Casper-API-Key", c.ApiKey)
+	req.Header.Set("X-Casper-API-Key", c.APIKey)
 	req.Header.Set("X-Casper-Signature", casperSignature)
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Expect", "100-continue")
@@ -184,13 +184,13 @@ func (c *Casper) GetAttestation(timestamp, password string) (string, error) {
 	attestForm.Add("protobuf", b64protobuf)
 	attestForm.Add("snapchat_version", SnapchatVersion)
 
-	casperSignature = c.GenerateRequestSignature(attestForm, CasperAttestationAttestBinaryURL, c.ApiSecret)
+	casperSignature = c.GenerateRequestSignature(attestForm, CasperAttestationAttestBinaryURL, c.APISecret)
 	attestReq, err := http.NewRequest("POST", CasperAttestationAttestBinaryURL, strings.NewReader(attestForm.Encode()))
 
 	attestReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	attestReq.Header.Set("Accept", "*/*")
 	attestReq.Header.Set("Expect", "100-continue")
-	attestReq.Header.Set("X-Casper-API-Key", c.ApiKey)
+	attestReq.Header.Set("X-Casper-API-Key", c.APIKey)
 	attestReq.Header.Set("X-Casper-Signature", casperSignature)
 	attestReq.Header.Set("Accept-Encoding", "gzip;q=0,deflate,sdch")
 	attestReq.Header.Set("User-Agent", "CasperGoAPIClient/1.1")
@@ -274,10 +274,10 @@ func (c *Casper) GetClientAuthToken(username, password, timestamp string) (strin
 	clientAuthForm.Add("timestamp", timestamp)
 	clientAuthForm.Add("snapchat_version", SnapchatVersion)
 
-	casperSignature := c.GenerateRequestSignature(clientAuthForm, CasperSignRequestURL, c.ApiSecret)
+	casperSignature := c.GenerateRequestSignature(clientAuthForm, CasperSignRequestURL, c.APISecret)
 	req, err := http.NewRequest("POST", CasperSignRequestURL, strings.NewReader(string(clientAuthForm.Encode())))
 	req.Header.Set("User-Agent", "CasperGoAPIClient/1.1")
-	req.Header.Set("X-Casper-API-Key", c.ApiKey)
+	req.Header.Set("X-Casper-API-Key", c.APIKey)
 	req.Header.Set("X-Casper-Signature", casperSignature)
 	req.Header.Set("Accept-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

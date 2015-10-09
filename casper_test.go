@@ -6,15 +6,15 @@ import (
 )
 
 type TestCasperCredentials struct {
-	TestApiKey    string
-	TestApiSecret string
+	TestAPIKey    string
+	TestAPISecret string
 }
 
 // Setup test API Keys. Replace with your own to carry out tests.
 var (
 	testCasperKeys = TestCasperCredentials{
-		TestApiKey:    "test_api_key",
-		TestApiSecret: "test_api_secret",
+		TestAPIKey:    "test_api_key",
+		TestAPISecret: "test_api_secret",
 	}
 )
 
@@ -22,8 +22,8 @@ var (
 func TestGenerateRequestSignature(t *testing.T) {
 
 	var testCasperClient = &Casper{
-		ApiKey:         testCasperKeys.TestApiKey,
-		ApiSecret:      testCasperKeys.TestApiSecret,
+		APIKey:         testCasperKeys.TestAPIKey,
+		APISecret:      testCasperKeys.TestAPISecret,
 		Username:       "test_username",
 		GoogleMail:     "testgmail@gmail.com",
 		GooglePassword: "attesttesttesttesttestpassword",
@@ -40,7 +40,7 @@ func TestGenerateRequestSignature(t *testing.T) {
 		signature   string
 		expectation string
 	}{
-		{testForm, CasperAttestationAttestBinaryURL, testCasperClient.ApiSecret, "v1:285f5177da4984ef582b1fa665071f83c0400e94019b9be4b3aacaf0037c74ba"},
+		{testForm, CasperAttestationAttestBinaryURL, testCasperClient.APISecret, "v1:285f5177da4984ef582b1fa665071f83c0400e94019b9be4b3aacaf0037c74ba"},
 	}
 
 	for _, test := range paramTests {
