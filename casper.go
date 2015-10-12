@@ -83,7 +83,7 @@ func (c *Casper) GenerateRequestSignature(params url.Values, endpoint, signature
 }
 
 // GetAttestation fetches a valid Google attestation using the Casper API.
-func (c *Casper) GetAttestation(timestamp, password string) (string, error) {
+func (c *Casper) GetAttestation(username, timestamp, password string) (string, error) {
 	var tr *http.Transport
 
 	tr = &http.Transport{
@@ -103,7 +103,7 @@ func (c *Casper) GetAttestation(timestamp, password string) (string, error) {
 	client := &http.Client{Transport: tr}
 
 	clientAuthForm := url.Values{}
-	clientAuthForm.Add("username", c.Username)
+	clientAuthForm.Add("username", username)
 	clientAuthForm.Add("password", password)
 	clientAuthForm.Add("timestamp", timestamp)
 	clientAuthForm.Add("snapchat_version", SnapchatVersion)
@@ -176,7 +176,7 @@ func (c *Casper) GetAttestation(timestamp, password string) (string, error) {
 	// 3 - Send snapchat version, nonce and protobuf data to Casper API in exchange for an attestation request.
 	b64protobuf := base64.StdEncoding.EncodeToString(protobufData)
 	hash := sha256.New()
-	io.WriteString(hash, c.Username+"|"+password+"|"+timestamp+"|"+"/loq/login")
+	io.WriteString(hash, username+"|"+password+"|"+timestamp+"|"+"/loq/login")
 	nonce := base64.StdEncoding.EncodeToString(hash.Sum(nil))
 
 	attestForm := url.Values{}
