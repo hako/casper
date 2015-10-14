@@ -22,16 +22,15 @@ var (
 func TestGenerateRequestSignature(t *testing.T) {
 
 	var testCasperClient = &Casper{
-		APIKey:         testCasperKeys.TestAPIKey,
-		APISecret:      testCasperKeys.TestAPISecret,
-		Username:       "test_username",
-		GoogleMail:     "testgmail@gmail.com",
-		GooglePassword: "attesttesttesttesttestpassword",
+		APIKey:    testCasperKeys.TestAPIKey,
+		APISecret: testCasperKeys.TestAPISecret,
+		Username:  "justicecarversc",
+		Password:  "attesttesttesttesttestpassword",
 	}
 
 	testForm := url.Values{}
 	testForm.Add("username", testCasperClient.Username)
-	testForm.Add("password", testCasperClient.GooglePassword)
+	testForm.Add("password", testCasperClient.Password)
 	testForm.Add("timestamp", "0123456789")
 
 	var paramTests = []struct {
