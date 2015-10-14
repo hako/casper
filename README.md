@@ -20,19 +20,32 @@ And so on.
 package main
 
 import (
+	"fmt"
 	"github.com/hako/casper"
+	"strconv"
+	"time"
 )
 
 func main() {
 	casperClient := &casper.Casper{
-		ApiKey:          "yourapikey",
-		ApiSecret:       "youapisecret",
-		Username:        "yoursnapchatusername",
-		Password:  		 "yoursnapchataccountpassword",
-		Debug:            false,
+		APIKey:    "yourapikey",
+		APISecret: "youapisecret",
+		Username:  "yoursnapchatusername",
+		Password:  "yoursnapchataccountpassword",
+		Debug:     true,
 	}
+	timestamp := strconv.Itoa(int(time.Now().UnixNano() / 1000000))
+	
 	// Call any *casper.Casper methods.
+	attestation, err := casperClient.GetAttestation(casperClient.Username, casperClient.Password, timestamp)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println("Attestation" + attestation)
 }
+
 ```
 ## Todo
 - [ ] More tests.

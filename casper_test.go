@@ -19,7 +19,6 @@ var (
 )
 
 // Test Request signature.
-// Test Request signature.
 func TestGenerateRequestSignature(t *testing.T) {
 
 	var testCasperClient = &Casper{
