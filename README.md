@@ -21,9 +21,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/hako/casper"
 	"strconv"
 	"time"
+	
+	"github.com/hako/casper"
 )
 
 func main() {
@@ -32,7 +33,7 @@ func main() {
 		APISecret: "youapisecret",
 		Username:  "yoursnapchatusername",
 		Password:  "yoursnapchataccountpassword",
-		Debug:     true,
+		Debug:     false,
 	}
 	timestamp := strconv.Itoa(int(time.Now().UnixNano() / 1000000))
 	
@@ -43,7 +44,7 @@ func main() {
 		fmt.Println(err)
 	}
 
-	fmt.Println("Attestation" + attestation)
+	fmt.Println("Attestation: " + attestation)
 }
 
 ```
