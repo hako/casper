@@ -1,4 +1,4 @@
-# casper
+# casper [![Build Status](https://travis-ci.org/hako/casper.svg?branch=master)](https://travis-ci.org/hako/casper)
 casper is a small golang library for interacting with the Casper API.
 
 # Installation
@@ -28,7 +28,7 @@ func main() {
 		ApiKey:          "yourapikey",
 		ApiSecret:       "youapisecret",
 		Username:        "yoursnapchatusername",
-		Password:  		 "yourgmailaccountpassword",
+		Password:  		 "yoursnapchataccountpassword",
 		Debug:            false,
 	}
 	// Call any *casper.Casper methods.

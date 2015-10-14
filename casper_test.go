@@ -19,12 +19,13 @@ var (
 )
 
 // Test Request signature.
+// Test Request signature.
 func TestGenerateRequestSignature(t *testing.T) {
 
 	var testCasperClient = &Casper{
 		APIKey:    testCasperKeys.TestAPIKey,
 		APISecret: testCasperKeys.TestAPISecret,
-		Username:  "justicecarversc",
+		Username:  "test_username",
 		Password:  "attesttesttesttesttestpassword",
 	}
 
