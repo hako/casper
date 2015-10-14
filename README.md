@@ -28,8 +28,7 @@ func main() {
 		ApiKey:          "yourapikey",
 		ApiSecret:       "youapisecret",
 		Username:        "yoursnapchatusername",
-		GoogleMail:      "yourgmailaccount",
-		GooglePassword:  "yourgmailaccountpassword",
+		Password:  		 "yourgmailaccountpassword",
 		Debug:            false,
 	}
 	// Call any *casper.Casper methods.
@@ -41,11 +40,9 @@ func main() {
 
 ## Security
 
-As you can see from the example above, using this library requires a gmail account since this API connects to Google to request tokens linked to your Google account.
+This library requires you to have a Snapchat account.
 
 Placing API keys or any hardcoded sensitive information in git is not recommended or advised!
-
-Either use environment variables or use a throwaway gmail account.
 
 By using this library you also agree to the [Casper Terms of Use](http://clients.casper.io/terms.php).
 

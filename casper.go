@@ -39,12 +39,11 @@ var (
 
 // Casper holds credentials to be used when connecting to the Casper API.
 type Casper struct {
-	APIKey         string
-	APISecret      string
-	Username       string
-	GoogleMail     string
-	GooglePassword string
-	Debug          bool
+	APIKey    string
+	APISecret string
+	Username  string
+	Password  string
+	Debug     bool
 }
 
 // Error handles errors returned by casper methods.
@@ -83,7 +82,7 @@ func (c *Casper) GenerateRequestSignature(params url.Values, endpoint, signature
 }
 
 // GetAttestation fetches a valid Google attestation using the Casper API.
-func (c *Casper) GetAttestation(username, timestamp, password string) (string, error) {
+func (c *Casper) GetAttestation(username, password, timestamp string) (string, error) {
 	var tr *http.Transport
 
 	tr = &http.Transport{
