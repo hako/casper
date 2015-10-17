@@ -15,13 +15,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 )
 
 // Casper constants.
 const (
 	SnapchatVersion = "9.16.2.0"
-	ApplicationID   = "com.snapchat.android"
 
 	CasperSignRequestURL             = "https://api.casper.io/snapchat/clientauth/signrequest"
 	CasperAttestationCreateBinaryURL = "https://api.casper.io/snapchat/attestation/create"
@@ -58,23 +58,28 @@ func (e Error) Error() string {
 	return fmt.Sprintf("%s\nReason: %s", e.Err, e.Reason.Error())
 }
 
+// sortMap sorts a given url.Values map m alphabetically by it's keys, whilst retaining the values.
+func sortURLMap(m url.Values) string {
+	var keys []string
+	var sortedParamString string
+
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		v := m[k]
+		sortedParamString += k + v[0]
+	}
+
+	return sortedParamString
+}
+
 // GenerateRequestSignature creates a Casper API request signature.
-func (c *Casper) GenerateRequestSignature(params url.Values, endpoint, signature string) string {
-	var requestString string
-	var k, v []string
-
-	if endpoint == CasperAttestationAttestBinaryURL {
-		k = []string{"nonce", "protobuf", "snapchat_version"}
-		v = []string{params.Get("nonce"), params.Get("protobuf"), params.Get("snapchat_version")}
-	} else {
-		k = []string{"password", "snapchat_version", "timestamp", "username"}
-		v = []string{params.Get("password"), params.Get("snapchat_version"), params.Get("timestamp"), params.Get("username")}
-	}
-
-	for i := 0; i < len(k); i++ {
-		requestString += k[i] + v[i]
-	}
-
+func (c *Casper) GenerateRequestSignature(params url.Values, signature string) string {
+	requestString := sortURLMap(params)
 	byteString := []byte(requestString)
 	mac := hmac.New(sha256.New, []byte(signature))
 	mac.Write(byteString)
@@ -107,7 +112,7 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 	clientAuthForm.Add("timestamp", timestamp)
 	clientAuthForm.Add("snapchat_version", SnapchatVersion)
 
-	casperSignature := c.GenerateRequestSignature(clientAuthForm, CasperAttestationCreateBinaryURL, c.APISecret)
+	casperSignature := c.GenerateRequestSignature(clientAuthForm, c.APISecret)
 
 	req, err := http.NewRequest("GET", CasperAttestationCreateBinaryURL, nil)
 	req.Header.Set("User-Agent", "CasperGoAPIClient/1.1")
@@ -183,7 +188,7 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 	attestForm.Add("protobuf", b64protobuf)
 	attestForm.Add("snapchat_version", SnapchatVersion)
 
-	casperSignature = c.GenerateRequestSignature(attestForm, CasperAttestationAttestBinaryURL, c.APISecret)
+	casperSignature = c.GenerateRequestSignature(attestForm, c.APISecret)
 	attestReq, err := http.NewRequest("POST", CasperAttestationAttestBinaryURL, strings.NewReader(attestForm.Encode()))
 
 	attestReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -273,7 +278,7 @@ func (c *Casper) GetClientAuthToken(username, password, timestamp string) (strin
 	clientAuthForm.Add("timestamp", timestamp)
 	clientAuthForm.Add("snapchat_version", SnapchatVersion)
 
-	casperSignature := c.GenerateRequestSignature(clientAuthForm, CasperSignRequestURL, c.APISecret)
+	casperSignature := c.GenerateRequestSignature(clientAuthForm, c.APISecret)
 	req, err := http.NewRequest("POST", CasperSignRequestURL, strings.NewReader(string(clientAuthForm.Encode())))
 	req.Header.Set("User-Agent", "CasperGoAPIClient/1.1")
 	req.Header.Set("X-Casper-API-Key", c.APIKey)
