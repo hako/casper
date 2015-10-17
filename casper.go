@@ -58,7 +58,7 @@ func (e Error) Error() string {
 	return fmt.Sprintf("%s\nReason: %s", e.Err, e.Reason.Error())
 }
 
-// sortMap sorts a given url.Values map m alphabetically by it's keys, whilst retaining the values.
+// sortURLMap sorts a given url.Values map m alphabetically by it's keys, whilst retaining the values.
 func sortURLMap(m url.Values) string {
 	var keys []string
 	var sortedParamString string
