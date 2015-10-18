@@ -1,4 +1,9 @@
-# casper [![GoDoc](https://godoc.org/github.com/hako/casper?status.svg)](https://godoc.org/github.com/hako/casper) [![Build Status](https://travis-ci.org/hako/casper.svg?branch=master)](https://travis-ci.org/hako/casper) 
+# casper
+[![Build Status](https://img.shields.io/travis/hako/casper/master.svg?style=flat-square)](https://travis-ci.org/hako/casper)
+ [![License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](https://travis-ci.org/hako/casper)
+[![GoDoc](https://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/hako/casper)
+
+
 casper is a small golang library for interacting with the Casper API.
 
 # Installation
