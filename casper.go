@@ -132,7 +132,7 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 		return "", casperParseError
 	}
 	if c.Debug == true {
-		fmt.Println(parsed)
+		fmt.Println(string(parsed))
 	}
 
 	var binaryData map[string]interface{}
@@ -174,7 +174,7 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 		return "", casperParseError
 	}
 	if c.Debug == true {
-		fmt.Println(parsed)
+		fmt.Println(string(parsed))
 	}
 
 	json.Unmarshal(protobufData, &parsedData)
@@ -213,7 +213,7 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 	var attestData map[string]interface{}
 	attestation, err := ioutil.ReadAll(attestRes.Body)
 	if c.Debug == true {
-		fmt.Println(attestation)
+		fmt.Println(string(attestation))
 	}
 	json.Unmarshal(attestation, &attestData)
 
@@ -248,7 +248,7 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 		return "", casperParseError
 	}
 	if c.Debug == true {
-		fmt.Println(parsed)
+		fmt.Println(string(attestDecompressedRes))
 	}
 
 	var attestSignedData map[string]interface{}
@@ -304,7 +304,7 @@ func (c *Casper) GetClientAuthToken(username, password, timestamp string) (strin
 		return "", casperParseError
 	}
 	if c.Debug == true {
-		fmt.Println(body)
+		fmt.Println(string(body))
 	}
 
 	var data map[string]interface{}
