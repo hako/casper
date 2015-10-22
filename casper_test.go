@@ -18,7 +18,7 @@ var (
 	}
 )
 
-// Test Request signature.
+// Test GenerateRequestSignature.
 func TestGenerateRequestSignature(t *testing.T) {
 
 	var testCasperClient = &Casper{
@@ -89,6 +89,33 @@ func TestSortURLMap(t *testing.T) {
 		result := sortURLMap(test.params)
 		if result != test.expectation {
 			t.Errorf("sortURLMap(%q) failed test. \n\n\rWant: \n\r\"%s\" \n\rGot: \n\r\"%s\" \n\n", test.params, test.expectation, result)
+		}
+	}
+}
+
+// Test SetProxyURL.
+func TestSetProxyURL(t *testing.T) {
+
+	var testCasperClient = &Casper{
+		APIKey:    testCasperKeys.TestAPIKey,
+		APISecret: testCasperKeys.TestAPISecret,
+		Username:  "test_username",
+		Password:  "attesttesttesttesttestpassword",
+	}
+
+	var paramTests = []struct {
+		param string
+	}{
+		{"http://192.168.2.3"},
+		{"http://192.168.2.3:8080"},
+		{"https://192.168.2.3"},
+		{"http://192.168.2.3:8080"},
+	}
+
+	for _, test := range paramTests {
+		err := testCasperClient.SetProxyURL(test.param)
+		if err != nil {
+			t.Errorf("TestSetProxyURL(%q) failed test. \n\n\rWant: \n\r\"%s\" \n\rGot: \n\r\"%s\" \n\n", test.param, "<nil>", err)
 		}
 	}
 }

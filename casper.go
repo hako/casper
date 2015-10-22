@@ -44,6 +44,7 @@ type Casper struct {
 	Username  string
 	Password  string
 	Debug     bool
+	ProxyURL  *url.URL
 }
 
 // Error handles errors returned by casper methods.
@@ -94,13 +95,8 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
-	if c.Debug == true {
-		proxyURL, err := url.Parse("http://192.168.2.1:8889")
-		if err != nil {
-			casperParseError.Reason = err
-			return "", casperParseError
-		}
-		tr.Proxy = http.ProxyURL(proxyURL)
+	if c.ProxyURL != nil {
+		tr.Proxy = http.ProxyURL(c.ProxyURL)
 	}
 
 	// 1 - Fetch the device binary.
@@ -134,6 +130,9 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 	if err != nil {
 		casperParseError.Reason = err
 		return "", casperParseError
+	}
+	if c.Debug == true {
+		fmt.Println(parsed)
 	}
 
 	var binaryData map[string]interface{}
@@ -174,6 +173,9 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 		casperParseError.Reason = err
 		return "", casperParseError
 	}
+	if c.Debug == true {
+		fmt.Println(parsed)
+	}
 
 	json.Unmarshal(protobufData, &parsedData)
 
@@ -210,6 +212,9 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 
 	var attestData map[string]interface{}
 	attestation, err := ioutil.ReadAll(attestRes.Body)
+	if c.Debug == true {
+		fmt.Println(attestation)
+	}
 	json.Unmarshal(attestation, &attestData)
 
 	// 4 - Get the binary value in the response map and send it to Google as protobuf in exchange for a signed attestation.
@@ -242,6 +247,9 @@ func (c *Casper) GetAttestation(username, password, timestamp string) (string, e
 		casperParseError.Reason = err
 		return "", casperParseError
 	}
+	if c.Debug == true {
+		fmt.Println(parsed)
+	}
 
 	var attestSignedData map[string]interface{}
 	json.Unmarshal(attestDecompressedRes, &attestSignedData)
@@ -262,13 +270,8 @@ func (c *Casper) GetClientAuthToken(username, password, timestamp string) (strin
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
-	if c.Debug == true {
-		proxyURL, err := url.Parse("http://192.168.2.1:8889")
-		if err != nil {
-			casperParseError.Reason = err
-			return "", casperParseError
-		}
-		tr.Proxy = http.ProxyURL(proxyURL)
+	if c.ProxyURL != nil {
+		tr.Proxy = http.ProxyURL(c.ProxyURL)
 	}
 
 	client := &http.Client{Transport: tr}
@@ -300,6 +303,9 @@ func (c *Casper) GetClientAuthToken(username, password, timestamp string) (strin
 		casperParseError.Reason = err
 		return "", casperParseError
 	}
+	if c.Debug == true {
+		fmt.Println(body)
+	}
 
 	var data map[string]interface{}
 	json.Unmarshal(body, &data)
@@ -310,4 +316,18 @@ func (c *Casper) GetClientAuthToken(username, password, timestamp string) (strin
 	}
 	signature := data["signature"].(string)
 	return signature, nil
+}
+
+// SetProxyURL sets given string addr, as a proxy addr. Primarily for debugging purposes.
+func (c *Casper) SetProxyURL(addr string) error {
+	proxyURL, err := url.Parse(addr)
+	if err != nil {
+		casperParseError.Reason = err
+		return casperParseError
+	}
+	if proxyURL.Scheme == "" {
+		return errors.New("Invalid proxy url.")
+	}
+	c.ProxyURL = proxyURL
+	return nil
 }
