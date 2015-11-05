@@ -21,7 +21,7 @@ import (
 
 // Casper constants.
 const (
-	SnapchatVersion = "9.17.1.0"
+	SnapchatVersion = "9.18.2.0"
 
 	CasperSignRequestURL             = "https://api.casper.io/snapchat/clientauth/signrequest"
 	CasperAttestationCreateBinaryURL = "https://api.casper.io/snapchat/attestation/create"
