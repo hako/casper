@@ -2,7 +2,7 @@
 [![Build Status](https://img.shields.io/travis/hako/casper/master.svg?style=flat-square)](https://travis-ci.org/hako/casper)
  [![License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](https://travis-ci.org/hako/casper)
 [![GoDoc](https://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/hako/casper)
-
+![CasperStatus](https://www.mgp25.com/cstatus/status.svg)
 
 casper is a small golang library for interacting with the Casper API.
 
