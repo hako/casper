@@ -11,7 +11,9 @@ casper is a small golang library for interacting with the Casper API.
 
 ## Usage
 
-You would need to register an account on the [Casper API portal](https://clients.casper.io/register.php) in order to use this library. Register an account and comeback to the README.
+_Edit: The Casper API is currently not accepting any more registrations at this time. :(_
+
+<del>You would need to register an account on the [Casper API portal](https://clients.casper.io/register.php)</del> in order to use this library. Register an account and comeback to the README.
 
 _I won't disappear in 10 seconds :P_
 
