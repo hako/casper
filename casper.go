@@ -2,49 +2,55 @@
 package casper
 
 import (
-	"compress/gzip"
-	"crypto/hmac"
-	"crypto/sha256"
 	"crypto/tls"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"sort"
+	"strconv"
 	"strings"
+	"time"
+
+	jwt "github.com/dgrijalva/jwt-go"
 )
 
 // Casper constants.
 const (
-	SnapchatVersion = "9.19.0.0"
-
-	CasperSignRequestURL             = "https://api.casper.io/snapchat/clientauth/signrequest"
-	CasperAttestationCreateBinaryURL = "https://api.casper.io/snapchat/attestation/create"
-	CasperAttestationAttestBinaryURL = "https://api.casper.io/snapchat/attestation/attest"
-
-	GoogleSafteyNetURL    = "https://www.googleapis.com/androidantiabuse/v1/x/create?alt=PROTO&key=AIzaSyBofcZsgLSS7BOnBjZPEkk4rYwzOIz-lTI"
-	AttestationCheckerURL = "https://www.googleapis.com/androidcheck/v1/attestations/attest?alt=JSON&key=AIzaSyDqVnJBjE5ymo--oBJt3On7HQx9xNm1RHA"
+	CasperBaseURL   = "https://casper-api.herokuapp.com"
+	SnapchatBaseURL = "https://app.snapchat.com"
 )
 
 // Casper error variables.
 var (
-	casperParseError = Error{Err: "casper: CasperParseError"}
-	casperHTTPError  = Error{Err: "casper: CasperHTTPError"}
+	casperParseError      = Error{Err: "casper: CasperParseError"}
+	casperHTTPError       = Error{Err: "casper: CasperHTTPError"}
+	casperSignatureError  = Error{Err: "casper: CasperSignatureError"}
+	casperAuthError       = Error{Err: "casper: casperAuthError"}
+	casperDeprecatedError = Error{Err: "casper: casperDeprecatedError"}
 )
 
 // Casper holds credentials to be used when connecting to the Casper API.
 type Casper struct {
-	APIKey    string
-	APISecret string
-	Username  string
-	Password  string
-	Debug     bool
-	ProxyURL  *url.URL
+	APIKey      string
+	APISecret   string
+	Username    string
+	Password    string
+	AuthToken   string
+	Debug       bool
+	ProxyURL    *url.URL
+	ProjectName string
+}
+
+// Snapchat holds the credentials needed to pass on data to Snapchat's Servers.
+type Snapchat struct {
+	CasperClient *Casper
+}
+
+// Client is an interface for methods that wish to communicate with Casper and Snapchat.
+type Client interface {
+	performRequest(method string, endpoint string, params map[string]string, headers map[string]string) ([]byte, error)
 }
 
 // Error handles errors returned by casper methods.
@@ -59,275 +65,406 @@ func (e Error) Error() string {
 	return fmt.Sprintf("%s\nReason: %s", e.Err, e.Reason.Error())
 }
 
-// sortURLMap sorts a given url.Values map m alphabetically by it's keys, whilst retaining the values.
-func sortURLMap(m url.Values) string {
-	var keys []string
-	var sortedParamString string
-
-	for k := range m {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		v := m[k]
-		sortedParamString += k + v[0]
-	}
-
-	return sortedParamString
-}
-
-// GenerateRequestSignature creates a Casper API request signature.
-func (c *Casper) GenerateRequestSignature(params url.Values, signature string) string {
-	requestString := sortURLMap(params)
-	byteString := []byte(requestString)
-	mac := hmac.New(sha256.New, []byte(signature))
-	mac.Write(byteString)
-	return "v1:" + hex.EncodeToString(mac.Sum(nil))
-}
-
-// GetAttestation fetches a valid Google attestation using the Casper API.
-func (c *Casper) GetAttestation(username, password, timestamp string) (string, error) {
+// performRequest is a template that creates HTTP requests with proxy and debug support.
+func (s *Snapchat) performRequest(method string, endpoint string, params map[string]string, headers map[string]string) ([]byte, error) {
 	var tr *http.Transport
+	var snapchatForm url.Values
+	var req *http.Request
+
+	if s.CasperClient.Debug == true {
+		fmt.Printf(method+"\t%s\n", SnapchatBaseURL+endpoint)
+	}
 
 	tr = &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
 	}
 
-	if c.ProxyURL != nil {
-		tr.Proxy = http.ProxyURL(c.ProxyURL)
+	if s.CasperClient.ProxyURL != nil {
+		tr.Proxy = http.ProxyURL(s.CasperClient.ProxyURL)
+		tr.TLSClientConfig.InsecureSkipVerify = true
 	}
 
-	// 1 - Fetch the device binary.
 	client := &http.Client{Transport: tr}
 
-	clientAuthForm := url.Values{}
-	clientAuthForm.Add("username", username)
-	clientAuthForm.Add("password", password)
-	clientAuthForm.Add("timestamp", timestamp)
-	clientAuthForm.Add("snapchat_version", SnapchatVersion)
+	if params != nil {
+		snapchatForm = url.Values{}
+		for k, v := range params {
+			snapchatForm.Add(k, v)
+		}
+	}
 
-	casperSignature := c.GenerateRequestSignature(clientAuthForm, c.APISecret)
+	if s.CasperClient.Debug == true {
+		fmt.Printf("%s\n", snapchatForm)
+	}
 
-	req, err := http.NewRequest("GET", CasperAttestationCreateBinaryURL, nil)
-	req.Header.Set("User-Agent", "CasperGoAPIClient/1.1")
-	req.Header.Set("X-Casper-API-Key", c.APIKey)
-	req.Header.Set("X-Casper-Signature", casperSignature)
-	req.Header.Set("Accept", "*/*")
-	req.Header.Set("Expect", "100-continue")
+	if method == "GET" {
+		req, _ = http.NewRequest(method, SnapchatBaseURL+endpoint, nil)
+	} else {
+		req, _ = http.NewRequest(method, SnapchatBaseURL+endpoint, strings.NewReader(snapchatForm.Encode()))
+	}
+
+	if headers != nil {
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	res, err := client.Do(req)
 	if err != nil {
-		casperHTTPError.Reason = err
-		return "", casperHTTPError
-	} else if res.StatusCode != 200 {
-		casperHTTPError.Reason = errors.New("Request returned non 200 code. (" + res.Status + ")")
-		return "", casperHTTPError
+		return nil, err
 	}
+	defer res.Body.Close()
 
-	parsed, err := ioutil.ReadAll(res.Body)
+	parsedData, err := parseBody(res)
 	if err != nil {
-		casperParseError.Reason = err
-		return "", casperParseError
-	}
-	if c.Debug == true {
-		fmt.Println(string(parsed))
+		return nil, err
 	}
 
-	var binaryData map[string]interface{}
-	json.Unmarshal(parsed, &binaryData)
-	b64binary := binaryData["binary"].(string)
-
-	protobuf, err := base64.StdEncoding.DecodeString(b64binary)
-	if err != nil {
-		casperParseError.Reason = err
-		return "", casperParseError
+	if s.CasperClient.Debug == true {
+		fmt.Println(string(parsedData))
 	}
 
-	// 2 - Send decoded binary as protobuf to Google for validation.
-	createBinaryReq, err := http.NewRequest("POST", GoogleSafteyNetURL, strings.NewReader(string(protobuf)))
-	createBinaryReq.Header.Set("Accept-Encoding", "gzip")
-	createBinaryReq.Header.Set("User-Agent", "DroidGuard/7329000 (A116 _Quad KOT49H); gzip")
-	createBinaryReq.Header.Set("Content-Type", "application/x-protobuf")
-
-	createBinaryRes, err := client.Do(createBinaryReq)
-
-	if err != nil {
-		casperHTTPError.Reason = err
-		return "", casperHTTPError
-	} else if createBinaryRes.StatusCode != 200 {
-		casperHTTPError.Reason = errors.New("Request returned non 200 code. (" + createBinaryRes.Status + ")")
-		return "", casperHTTPError
-	}
-
-	createBinaryGzipRes, err := gzip.NewReader(createBinaryRes.Body)
-	if err != nil {
-		casperParseError.Reason = err
-		return "", casperParseError
-	}
-
-	var parsedData map[string]interface{}
-	protobufData, err := ioutil.ReadAll(createBinaryGzipRes)
-	if err != nil {
-		casperParseError.Reason = err
-		return "", casperParseError
-	}
-	if c.Debug == true {
-		fmt.Println(string(parsed))
-	}
-
-	json.Unmarshal(protobufData, &parsedData)
-
-	// 3 - Send snapchat version, nonce and protobuf data to Casper API in exchange for an attestation request.
-	b64protobuf := base64.StdEncoding.EncodeToString(protobufData)
-	hash := sha256.New()
-	io.WriteString(hash, username+"|"+password+"|"+timestamp+"|"+"/loq/login")
-	nonce := base64.StdEncoding.EncodeToString(hash.Sum(nil))
-
-	attestForm := url.Values{}
-	attestForm.Add("nonce", nonce)
-	attestForm.Add("protobuf", b64protobuf)
-	attestForm.Add("snapchat_version", SnapchatVersion)
-
-	casperSignature = c.GenerateRequestSignature(attestForm, c.APISecret)
-	attestReq, err := http.NewRequest("POST", CasperAttestationAttestBinaryURL, strings.NewReader(attestForm.Encode()))
-
-	attestReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	attestReq.Header.Set("Accept", "*/*")
-	attestReq.Header.Set("Expect", "100-continue")
-	attestReq.Header.Set("X-Casper-API-Key", c.APIKey)
-	attestReq.Header.Set("X-Casper-Signature", casperSignature)
-	attestReq.Header.Set("Accept-Encoding", "gzip;q=0,deflate,sdch")
-	attestReq.Header.Set("User-Agent", "CasperGoAPIClient/1.1")
-
-	attestRes, err := client.Do(attestReq)
-	if err != nil {
-		casperHTTPError.Reason = err
-		return "", casperHTTPError
-	} else if attestRes.StatusCode != 200 {
-		casperHTTPError.Reason = errors.New("Request returned non 200 code. (" + attestRes.Status + ")")
-		return "", casperHTTPError
-	}
-
-	var attestData map[string]interface{}
-	attestation, err := ioutil.ReadAll(attestRes.Body)
-	if c.Debug == true {
-		fmt.Println(string(attestation))
-	}
-	json.Unmarshal(attestation, &attestData)
-
-	// 4 - Get the binary value in the response map and send it to Google as protobuf in exchange for a signed attestation.
-	_, attestExists := attestData["binary"].(string)
-	if attestExists != true {
-		casperParseError.Reason = errors.New("Key 'binary' does not exist.")
-		return "", casperParseError
-	}
-	attestDecodedBody, _ := base64.StdEncoding.DecodeString(attestData["binary"].(string))
-
-	attestCheckReq, err := http.NewRequest("POST", AttestationCheckerURL, strings.NewReader(string(attestDecodedBody)))
-	attestCheckReq.Header.Set("User-Agent", "SafetyNet/7899000 (WIKO JZO54K); gzip")
-	attestCheckReq.Header.Set("Content-Type", "application/x-protobuf")
-	attestCheckReq.Header.Set("Content-Length", string(len(attestDecodedBody)))
-	attestCheckReq.Header.Set("Connection", "Keep-Alive")
-	attestCheckReq.Header.Set("Accept-Encoding", "gzip")
-
-	attestCheckRes, err := client.Do(attestCheckReq)
-	if err != nil {
-		casperHTTPError.Reason = err
-		return "", casperHTTPError
-	} else if attestCheckRes.StatusCode != 200 {
-		casperHTTPError.Reason = errors.New("Request returned non 200 code. (" + attestCheckRes.Status + ")")
-		return "", casperHTTPError
-	}
-
-	attestGzipRes, err := gzip.NewReader(attestCheckRes.Body)
-	attestDecompressedRes, err := ioutil.ReadAll(attestGzipRes)
-	if err != nil {
-		casperParseError.Reason = err
-		return "", casperParseError
-	}
-	if c.Debug == true {
-		fmt.Println(string(attestDecompressedRes))
-	}
-
-	var attestSignedData map[string]interface{}
-	json.Unmarshal(attestDecompressedRes, &attestSignedData)
-	_, attestSigExists := attestSignedData["signedAttestation"].(string)
-	if attestSigExists != true {
-		casperParseError.Reason = errors.New("Key 'signedAttestation' does not exist.")
-		return "", casperParseError
-	}
-	singedAttestation := attestSignedData["signedAttestation"].(string)
-	return singedAttestation, nil
+	return parsedData, nil
 }
 
-// GetClientAuthToken fetches a generated client auth token using the Casper API.
-func (c *Casper) GetClientAuthToken(username, password, timestamp string) (string, error) {
-	var tr *http.Transport
-
-	tr = &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-
-	if c.ProxyURL != nil {
-		tr.Proxy = http.ProxyURL(c.ProxyURL)
-	}
-
-	client := &http.Client{Transport: tr}
-	clientAuthForm := url.Values{}
-	clientAuthForm.Add("username", username)
-	clientAuthForm.Add("password", password)
-	clientAuthForm.Add("timestamp", timestamp)
-	clientAuthForm.Add("snapchat_version", SnapchatVersion)
-
-	casperSignature := c.GenerateRequestSignature(clientAuthForm, c.APISecret)
-	req, err := http.NewRequest("POST", CasperSignRequestURL, strings.NewReader(string(clientAuthForm.Encode())))
-	req.Header.Set("User-Agent", "CasperGoAPIClient/1.1")
-	req.Header.Set("X-Casper-API-Key", c.APIKey)
-	req.Header.Set("X-Casper-Signature", casperSignature)
-	req.Header.Set("Accept-Encoding", "gzip")
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := client.Do(req)
+// Login performs a login request to Snapchat and returns an Updates model.
+func (c *Casper) Login(username string, password string) (Updates, error) {
+	model, err := c.login(username, password)
 	if err != nil {
-		casperHTTPError.Reason = err
-		return "", casperHTTPError
-	} else if resp.StatusCode != 200 {
-		casperHTTPError.Reason = errors.New("Request returned non 200 code. (" + resp.Status + ")")
-		return "", casperHTTPError
+		return Updates{}, err
 	}
-
-	body, err := ioutil.ReadAll(resp.Body)
+	headers := map[string]string{
+		"Accept":                       model.Headers.Accept,
+		"Accept-Language":              model.Headers.AcceptLanguage,
+		"Accept-Locale":                model.Headers.AcceptLocale,
+		"User-Agent":                   model.Headers.UserAgent,
+		"X-Snapchat-Client-Auth-Token": model.Headers.XSnapchatClientAuthToken,
+		"X-Snapchat-Client-Token":      model.Headers.XSnapchatClientToken,
+		"X-Snapchat-UUID":              model.Headers.XSnapchatUUID,
+	}
+	params := map[string]string{
+		"confirm_reactivation": model.Params.ConfirmReactivation,
+		"from_deeplink":        model.Params.FromDeeplink,
+		"height":               model.Params.Height,
+		"nt":                   model.Params.Nt,
+		"password":             password,
+		"pre_auth_token":       model.Params.PreAuthToken,
+		"remember_device":      model.Params.RememberDevice,
+		"req_token":            model.Params.ReqToken,
+		"screen_height_in":     model.Params.ScreenHeightIn,
+		"screen_height_px":     model.Params.ScreenHeightPx,
+		"screen_width_in":      model.Params.ScreenWidthIn,
+		"screen_width_px":      model.Params.ScreenWidthPx,
+		"timestamp":            strconv.FormatInt(model.Params.Timestamp, 10),
+		"user_ad_id":           model.Params.UserAdID,
+		"username":             username,
+		"width":                model.Params.Width,
+	}
+	s := Snapchat{
+		CasperClient: c,
+	}
+	data, err := s.performRequest("POST", "/loq/login", params, headers)
 	if err != nil {
-		casperParseError.Reason = err
-		return "", casperParseError
+		return Updates{}, err
 	}
-	if c.Debug == true {
-		fmt.Println(string(body))
+	// Save only once the user has logged in.
+	if c.Username == "" || c.Password == "" {
+		c.Username = username
+		c.Password = password
 	}
+	var scdata Updates
+	json.Unmarshal(data, &scdata)
 
-	var data map[string]interface{}
-	json.Unmarshal(body, &data)
-	_, signatureExists := data["signature"].(string)
-	if signatureExists != true {
-		casperParseError.Reason = errors.New("Key 'signature' does not exist.")
-		return "", casperParseError
-	}
-	signature := data["signature"].(string)
-	return signature, nil
+	// Save auth token.
+	c.AuthToken = scdata.UpdatesResponse.AuthToken
+	return scdata, nil
 }
 
-// SetProxyURL sets given string addr, as a proxy addr. Primarily for debugging purposes.
-func (c *Casper) SetProxyURL(addr string) error {
+// Updates fetches updates from Snapchat and returns an Updates model.
+func (c *Casper) Updates() (Updates, error) {
+	err := c.checkToken()
+	if err != nil {
+		return Updates{}, err
+	}
+	jwtform := map[string]string{
+		"username":   c.Username,
+		"auth_token": c.AuthToken,
+		"endpoint":   "/loq/all_updates",
+	}
+	token, err := c.signToken(jwtform)
+	if err != nil {
+		return Updates{}, err
+	}
+	data, err := c.endpointAuth(token)
+	if err != nil {
+		return Updates{}, err
+	}
+
+	updateEndpoint := data.Endpoints[0]   // update endpoint data
+	endpoint := updateEndpoint.Endpoint   // /loq/updates
+	headers := c.setSnapchatHeaders(data) // headers
+	params := map[string]string{
+		"username":  updateEndpoint.Params.Username,
+		"req_token": updateEndpoint.Params.ReqToken,
+		"timestamp": strconv.FormatInt(updateEndpoint.Params.Timestamp, 10),
+	}
+
+	s := Snapchat{
+		CasperClient: c,
+	}
+
+	scdata, err := s.performRequest("POST", endpoint, params, headers)
+	if err != nil {
+		return Updates{}, err
+	}
+
+	var updateData Updates
+	json.Unmarshal(scdata, &updateData)
+	return updateData, err
+}
+
+// Proxy sets given string addr, as a proxy addr. Primarily for debugging purposes.
+func (c *Casper) Proxy(addr string) error {
 	proxyURL, err := url.Parse(addr)
 	if err != nil {
 		casperParseError.Reason = err
 		return casperParseError
 	}
 	if proxyURL.Scheme == "" {
-		return errors.New("Invalid proxy url.")
+		return errors.New("invalid proxy url")
 	}
 	c.ProxyURL = proxyURL
 	return nil
+}
+
+// casperlogin logs into Casper and returns a SnapchatRequestLoginModel.
+func (c *Casper) login(username string, password string) (SnapchatRequestLoginModel, error) {
+	jwtform := map[string]string{
+		"username": username,
+		"password": password,
+	}
+	token, err := c.signToken(jwtform)
+	if err != nil {
+		return SnapchatRequestLoginModel{}, err
+	}
+	data, err := c.performRequest("POST", "/snapchat/ios/login", map[string]string{"jwt": token}, nil)
+	if err != nil {
+		return SnapchatRequestLoginModel{}, err
+	}
+
+	var model SnapchatRequestLoginModel
+	json.Unmarshal(data, &model)
+	return model, nil
+}
+
+// endpointAuth handles requests and responses to mutiple snapchat endpoints.
+func (c *Casper) endpointAuth(token string) (SnapchatRequestModel, error) {
+	data, err := c.performRequest("POST", "/snapchat/ios/endpointauth", map[string]string{"jwt": token}, nil)
+	if err != nil {
+		return SnapchatRequestModel{}, err
+	}
+	var scdata SnapchatRequestModel
+	json.Unmarshal(data, &scdata)
+	return scdata, nil
+}
+
+// signToken produces a JWT token signed with HS256. (HMAC-SHA256)
+func (c *Casper) signToken(params map[string]string) (string, error) {
+	t := time.Now().Unix()
+	token := jwt.New(jwt.SigningMethodHS256)
+	token.Claims["iat"] = t
+	for k, v := range params {
+		token.Claims[k] = v
+	}
+	jwtString, err := token.SignedString([]byte(c.APISecret))
+	if err != nil {
+		return "", err
+	}
+	return jwtString, nil
+}
+
+// setSnapchatHeaders converts the SnapchatRequestModel csrm to a map[string][string]
+// much more easier to add to request headers.
+func (c *Casper) setSnapchatHeaders(csrm SnapchatRequestModel) map[string]string {
+	scEndpoint := csrm.Endpoints[0]
+	headers := map[string]string{
+		"Accept":                       scEndpoint.Headers.Accept,
+		"User-Agent":                   scEndpoint.Headers.UserAgent,
+		"X-Snapchat-Client-Auth-Token": scEndpoint.Headers.XSnapchatClientAuthToken,
+		"X-Snapchat-UUID":              scEndpoint.Headers.XSnapchatUUID,
+	}
+	return headers
+}
+
+// performRequest is a template that creates HTTP requests with proxy and debug support.
+func (c *Casper) performRequest(method string, endpoint string, params map[string]string, headers map[string]string) ([]byte, error) {
+	var tr *http.Transport
+	var casperForm url.Values
+	var req *http.Request
+
+	if c.Debug == true {
+		fmt.Printf(method+"\t%s\n", CasperBaseURL+endpoint)
+	}
+
+	tr = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+	}
+
+	if c.ProxyURL != nil {
+		tr.Proxy = http.ProxyURL(c.ProxyURL)
+		tr.TLSClientConfig.InsecureSkipVerify = true
+	}
+
+	client := &http.Client{Transport: tr}
+
+	if params != nil {
+		casperForm = url.Values{}
+		for k, v := range params {
+			casperForm.Add(k, v)
+		}
+	}
+
+	if c.Debug == true {
+		fmt.Printf("%s\n", casperForm)
+	}
+
+	if method == "GET" {
+		req, _ = http.NewRequest(method, CasperBaseURL+endpoint, nil)
+	} else {
+		req, _ = http.NewRequest(method, CasperBaseURL+endpoint, strings.NewReader(casperForm.Encode()))
+	}
+
+	if c.ProjectName != "" {
+		c.ProjectName = c.ProjectName + " "
+	}
+
+	req.Header.Set("User-Agent", "CasperGoAPIClient/"+c.ProjectName+"1.1")
+	req.Header.Set("X-Casper-API-Key", c.APIKey)
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	res, err := client.Do(req)
+	if err != nil {
+		casperHTTPError.Reason = err
+		return nil, casperHTTPError
+	}
+	defer res.Body.Close()
+
+	parsedData, err := parseBody(res)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode != 200 {
+		var model APIErrorResponseModel
+		json.Unmarshal(parsedData, &model)
+		casperHTTPError.Reason = errors.New(model.Message + "  (" + res.Status + ")")
+		return nil, casperHTTPError
+	}
+
+	if c.Debug == true {
+		fmt.Println(string(parsedData))
+	}
+	return parsedData, nil
+}
+
+// parseBody is a helper function that parses the *http.Response body res to bytes.
+func parseBody(res *http.Response) ([]byte, error) {
+	parsedBody, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		casperParseError.Reason = err
+		return nil, casperParseError
+	}
+	return parsedBody, nil
+}
+
+func (c *Casper) checkToken() error {
+	if c.AuthToken == "" || c.Username == "" {
+		casperAuthError.Reason = errors.New("auth token or username does not exist")
+		return casperAuthError
+	}
+	return nil
+}
+
+// Casper Structs
+
+// SnapchatRequestLoginModel is a struct containing the endpoint headers parameters specifically for login.
+type SnapchatRequestLoginModel struct {
+	Code    int `json:"code"`
+	Headers struct {
+		Accept                   string `json:"Accept"`
+		AcceptLanguage           string `json:"Accept-Language"`
+		AcceptLocale             string `json:"Accept-Locale"`
+		UserAgent                string `json:"User-Agent"`
+		XSnapchatClientAuthToken string `json:"X-Snapchat-Client-Auth-Token"`
+		XSnapchatClientToken     string `json:"X-Snapchat-Client-Token"`
+		XSnapchatUUID            string `json:"X-Snapchat-UUID"`
+	} `json:"headers"`
+	Params struct {
+		ConfirmReactivation string `json:"confirm_reactivation"`
+		FromDeeplink        string `json:"from_deeplink"`
+		Height              string `json:"height"`
+		Nt                  string `json:"nt"`
+		Password            string `json:"password"`
+		PreAuthToken        string `json:"pre_auth_token"`
+		RememberDevice      string `json:"remember_device"`
+		ReqToken            string `json:"req_token"`
+		ScreenHeightIn      string `json:"screen_height_in"`
+		ScreenHeightPx      string `json:"screen_height_px"`
+		ScreenWidthIn       string `json:"screen_width_in"`
+		ScreenWidthPx       string `json:"screen_width_px"`
+		Timestamp           int64  `json:"timestamp"`
+		UserAdID            string `json:"user_ad_id"`
+		Username            string `json:"username"`
+		Width               string `json:"width"`
+	} `json:"params"`
+	Settings struct {
+		ForceClearHeaders bool `json:"force_clear_headers"`
+		ForceClearParams  bool `json:"force_clear_params"`
+	} `json:"settings"`
+	URL string `json:"url"`
+}
+
+// SnapchatRequestModel is a generic struct containing the endpoint headers and parameters for any Snapchat endpoint.
+type SnapchatRequestModel struct {
+	Code      int `json:"code"`
+	Endpoints []struct {
+		CacheMillis int    `json:"cache_millis"`
+		Endpoint    string `json:"endpoint"`
+		Headers     struct {
+			Accept                   string `json:"Accept"`
+			UserAgent                string `json:"User-Agent"`
+			XSnapchatClientAuthToken string `json:"X-Snapchat-Client-Auth-Token"`
+			XSnapchatUUID            string `json:"X-Snapchat-UUID"`
+		} `json:"headers"`
+		Params struct {
+			Username  string `json:"username"`
+			ReqToken  string `json:"req_token"`
+			Timestamp int64  `json:"timestamp"`
+		} `json:"params"`
+	} `json:"endpoints"`
+	Settings struct {
+		ForceExpireCached bool `json:"force_expire_cached"`
+	} `json:"settings"`
+}
+
+// APIErrorResponseModel is a struct containing just a HTTP status and a message specifying an error occured.
+type APIErrorResponseModel struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// GetAttestation fetches a valid Google attestation using the Casper API.
+// [DEPRECATED]
+func (c *Casper) GetAttestation(username, password, timestamp string) (string, error) {
+	casperDeprecatedError.Reason = errors.New("func (*Casper) GetAttestation is deprecated and will not work.\nPlease refrain from using this method")
+	return "", casperDeprecatedError
+}
+
+// GetClientAuthToken fetches a generated client auth token using the Casper API.
+// [DEPRECATED]
+func (c *Casper) GetClientAuthToken(username, password, timestamp string) (string, error) {
+	casperDeprecatedError.Reason = errors.New("func (*Casper) GetClientAuthToken is deprecated and will not work.\nPlease refrain from using this method")
+	return "", casperDeprecatedError
 }
