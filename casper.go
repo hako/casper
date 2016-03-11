@@ -224,6 +224,83 @@ func (c *Casper) Updates() (Updates, error) {
 	return updateData, err
 }
 
+// Register registers a account from Snapchat and returns an Register model.
+func (c *Casper) Register(username, password, email, birthday string) (Register, error) {
+	model, err := c.login(username, password)
+	if err != nil {
+		return Register{}, err
+	}
+	headers := map[string]string{
+		"Accept":          model.Headers.Accept,
+		"Accept-Language": model.Headers.AcceptLanguage,
+		"Accept-Locale":   model.Headers.AcceptLocale,
+		"User-Agent":      "Snapchat/9.0.0.30 (iPhone5,1; iOS 8.4; gzip)",
+	}
+	params := map[string]string{
+		"email":     email,
+		"password":  password,
+		"req_token": model.Params.ReqToken,
+		"timestamp": strconv.FormatInt(model.Params.Timestamp, 10),
+		"username":  username,
+		"birthday":  birthday,
+	}
+	s := Snapchat{
+		CasperClient: c,
+	}
+	data, err := s.performRequest("POST", "/loq/register", params, headers)
+	if err != nil {
+		return Register{}, err
+	}
+	var registerData Register
+	json.Unmarshal(data, &registerData)
+
+	// Save auth token.
+	c.AuthToken = registerData.AuthToken
+	c.Password = password
+	c.Username = username
+	return registerData, nil
+}
+
+// RegisterUsername registers a username from Snapchat and returns an Updates model.
+func (c *Casper) RegisterUsername(username string, email string) (Updates, error) {
+	err := c.checkToken()
+	if err != nil {
+		return Updates{}, err
+	}
+	jwtform := map[string]string{
+		"username":   c.Username,
+		"auth_token": c.AuthToken,
+		"endpoint":   "/loq/register_username",
+	}
+	token, err := c.signToken(jwtform)
+	if err != nil {
+		return Updates{}, err
+	}
+	endpointData, err := c.endpointAuth(token)
+	if err != nil {
+		return Updates{}, err
+	}
+	registerEndpoint := endpointData.Endpoints[0] // register endpoint data
+	endpoint := registerEndpoint.Endpoint
+	headers := c.setSnapchatHeaders(endpointData)
+	params := map[string]string{
+		"req_token":         registerEndpoint.Params.ReqToken,
+		"timestamp":         strconv.FormatInt(registerEndpoint.Params.Timestamp, 10),
+		"username":          email,
+		"selected_username": username,
+	}
+	s := Snapchat{
+		CasperClient: c,
+	}
+	data, err := s.performRequest("POST", endpoint, params, headers)
+	if err != nil {
+		return Updates{}, err
+	}
+	var registerUsernameData Updates
+	json.Unmarshal(data, &registerUsernameData)
+	return registerUsernameData, nil
+}
+
 // Proxy sets given string addr, as a proxy addr. Primarily for debugging purposes.
 func (c *Casper) Proxy(addr string) error {
 	proxyURL, err := url.Parse(addr)

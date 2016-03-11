@@ -84,6 +84,7 @@ See the [godoc](https://godoc.org/github.com/hako/casper) for more functions for
 ## Todo
 - [ ] More tests.
 - [ ] Code cleanup.
+	- [ ] DRY cleanup.
 
 ## Security
 
