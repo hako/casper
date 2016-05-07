@@ -69,7 +69,6 @@ func main() {
         APIKey:    "yourapikey",
         APISecret: "yourapisecret",
         Username:  "yoursnapchatusername",
-        Password:  "yoursnapchatpassword",
         AuthToken: "yoursnapchatauthtoken",
 	}
 	data, err := casperClient.Updates()
