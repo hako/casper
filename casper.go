@@ -135,7 +135,7 @@ func (s *Snapchat) performRequest(method string, endpoint string, params map[str
 		captchaID = res.Header["Content-Disposition"][0][20:]
 	}
 
-	if endpoint == "/ph/logout" || endpoint == "/loq/send" {
+	if endpoint == "/ph/logout" || endpoint == "/loq/send" || endpoint == "/bq/delete_story" {
 		status = res.StatusCode
 	}
 
@@ -286,13 +286,11 @@ func (c *Casper) GetCaptcha() (Captcha, error) {
 	if err != nil {
 		return Captcha{}, err
 	}
-
 	jwtform := map[string]string{
 		"username":   c.Username,
 		"auth_token": c.AuthToken,
 		"endpoint":   "/bq/get_captcha",
 	}
-
 	token, err := c.signToken(jwtform)
 	if err != nil {
 		return Captcha{}, err
@@ -301,7 +299,6 @@ func (c *Casper) GetCaptcha() (Captcha, error) {
 	if err != nil {
 		return Captcha{}, err
 	}
-
 	captchaEndpoint := data.Endpoints[0]  // update endpoint data
 	endpoint := captchaEndpoint.Endpoint  // /loq/get_captcha
 	headers := c.setSnapchatHeaders(data) // headers
@@ -310,21 +307,17 @@ func (c *Casper) GetCaptcha() (Captcha, error) {
 		"req_token": captchaEndpoint.Params.ReqToken,
 		"timestamp": strconv.FormatInt(captchaEndpoint.Params.Timestamp, 10),
 	}
-
 	s := Snapchat{
 		CasperClient: c,
 	}
-
 	scdata, err := s.performRequest("POST", endpoint, params, headers)
 	if err != nil {
 		return Captcha{}, err
 	}
-
 	captcha := Captcha{
 		ID:   captchaID,
 		Data: scdata,
 	}
-
 	return captcha, nil
 }
 
@@ -781,8 +774,8 @@ func (c *Casper) RetrySend() (Options, error) {
 	return options, err
 }
 
-// Stories fetches the current users Snapchat stories.
-// Useful if you only want the Snapchat stories. [Not working as of now]
+// Stories fetches the current users Snapchat stories. Useful if you only want the Snapchat stories.
+// [Not working as of now. Just use /loq/all_updates instead]
 func (c *Casper) Stories() (Stories, error) {
 	err := c.checkToken()
 	if err != nil {
@@ -821,7 +814,54 @@ func (c *Casper) Stories() (Stories, error) {
 	return storiesData, err
 }
 
+// PostStory sends a story to Snapchat.
+func (c *Casper) PostStory(mediaID string, caption string, time int, mediaType string) ([]byte, error) {
+	err := c.checkToken()
+	if err != nil {
+		return nil, err
+	}
+	jwtform := map[string]string{
+		"username":   c.Username,
+		"auth_token": c.AuthToken,
+		"endpoint":   "/bq/post_story",
+	}
+	token, err := c.signToken(jwtform)
+	if err != nil {
+		return nil, err
+	}
+	data, err := c.endpointAuth(token)
+	if err != nil {
+		return nil, err
+	}
+	postStoryEndpoint := data.Endpoints[0] // upload endpoint data
+	endpoint := postStoryEndpoint.Endpoint // /bq/post_story
+	headers := c.setSnapchatHeaders(data)  // headers
+	params := map[string]string{
+		"camera_front_facing": strconv.FormatInt(0, 10),
+		"username":            postStoryEndpoint.Params.Username,
+		"req_token":           postStoryEndpoint.Params.ReqToken,
+		"media_id":            mediaID,
+		"client_id":           mediaID,
+		"type":                mediaType,
+		"caption":             caption,
+		"zipped":              strconv.FormatInt(0, 10),
+		"orientation":         strconv.FormatInt(0, 10),
+		"time":                strconv.FormatInt(int64(time), 10),
+		"story_timestamp":     strconv.FormatInt(postStoryEndpoint.Params.Timestamp, 10),
+		"timestamp":           strconv.FormatInt(postStoryEndpoint.Params.Timestamp, 10),
+	}
+	s := Snapchat{
+		CasperClient: c,
+	}
+	scdata, err := s.performRequest("POST", endpoint, params, headers)
+	if err != nil {
+		return nil, err
+	}
+	return scdata, err
+}
+
 // RetryPostStory retries to resend media to Snapchat users.
+// This method is sometimes used to quickly post a story to Snapchat.
 // TODO: Implement multipart requests instead of returning Options.
 func (c *Casper) RetryPostStory() (Options, error) {
 	err := c.checkToken()
@@ -831,7 +871,7 @@ func (c *Casper) RetryPostStory() (Options, error) {
 	jwtform := map[string]string{
 		"username":   c.Username,
 		"auth_token": c.AuthToken,
-		"endpoint":   "/loq/retry_post_story",
+		"endpoint":   "/bq/retry_post_story",
 	}
 	token, err := c.signToken(jwtform)
 	if err != nil {
@@ -841,18 +881,269 @@ func (c *Casper) RetryPostStory() (Options, error) {
 	if err != nil {
 		return Options{}, err
 	}
-	uploadEndpoint := data.Endpoints[0]   // upload endpoint data
-	headers := c.setSnapchatHeaders(data) // headers
+	retryPostStoryEndpoint := data.Endpoints[0] // upload endpoint data
+	headers := c.setSnapchatHeaders(data)       // headers
 	params := map[string]string{
-		"username":  uploadEndpoint.Params.Username,
-		"req_token": uploadEndpoint.Params.ReqToken,
-		"timestamp": strconv.FormatInt(uploadEndpoint.Params.Timestamp, 10),
+		"username":  retryPostStoryEndpoint.Params.Username,
+		"req_token": retryPostStoryEndpoint.Params.ReqToken,
+		"timestamp": strconv.FormatInt(retryPostStoryEndpoint.Params.Timestamp, 10),
 	}
 	options := Options{
 		headers,
 		params,
 	}
 	return options, err
+}
+
+// DeleteStory deletes media from a Snapchat story.
+func (c *Casper) DeleteStory(id string) error {
+	err := c.checkToken()
+	if err != nil {
+		return err
+	}
+	jwtform := map[string]string{
+		"username":   c.Username,
+		"auth_token": c.AuthToken,
+		"endpoint":   "/bq/delete_story",
+	}
+	token, err := c.signToken(jwtform)
+	if err != nil {
+		return err
+	}
+	data, err := c.endpointAuth(token)
+	if err != nil {
+		return err
+	}
+	deleteStoryEndpoint := data.Endpoints[0] // upload endpoint data
+	endpoint := deleteStoryEndpoint.Endpoint // /bq/delete_story
+	headers := c.setSnapchatHeaders(data)    // headers
+	params := map[string]string{
+		"username":  deleteStoryEndpoint.Params.Username,
+		"story_id":  id,
+		"req_token": deleteStoryEndpoint.Params.ReqToken,
+		"timestamp": strconv.FormatInt(deleteStoryEndpoint.Params.Timestamp, 10),
+	}
+	s := Snapchat{
+		CasperClient: c,
+	}
+	_, reqErr := s.performRequest("POST", endpoint, params, headers)
+	if reqErr != nil {
+		return err
+	}
+	if status != 204 {
+		return errors.New("snapchat: Something went wrong")
+	}
+	return nil
+}
+
+// DoublePost posts a snap to a users Snapchat story and to other Snapchat users.
+// TODO: Implement multipart requests instead of returning Options.
+func (c *Casper) DoublePost() (Options, error) {
+	err := c.checkToken()
+	if err != nil {
+		return Options{}, err
+	}
+	jwtform := map[string]string{
+		"username":   c.Username,
+		"auth_token": c.AuthToken,
+		"endpoint":   "/loq/double_post",
+	}
+	token, err := c.signToken(jwtform)
+	if err != nil {
+		return Options{}, err
+	}
+	data, err := c.endpointAuth(token)
+	if err != nil {
+		return Options{}, err
+	}
+	doublePostEndpoint := data.Endpoints[0] // upload endpoint data
+	headers := c.setSnapchatHeaders(data)   // headers
+	params := map[string]string{
+		"username":  doublePostEndpoint.Params.Username,
+		"req_token": doublePostEndpoint.Params.ReqToken,
+		"timestamp": strconv.FormatInt(doublePostEndpoint.Params.Timestamp, 10),
+	}
+	options := Options{
+		headers,
+		params,
+	}
+	return options, err
+}
+
+// UserExists checks if a username exists in Snapchat.
+func (c *Casper) UserExists(requestUsername string) ([]byte, error) {
+	err := c.checkToken()
+	if err != nil {
+		return nil, err
+	}
+	jwtform := map[string]string{
+		"username":   c.Username,
+		"auth_token": c.AuthToken,
+		"endpoint":   "/bq/user_exists",
+	}
+	token, err := c.signToken(jwtform)
+	if err != nil {
+		return nil, err
+	}
+	data, err := c.endpointAuth(token)
+	if err != nil {
+		return nil, err
+	}
+	userExistsEndpoint := data.Endpoints[0] // upload endpoint data
+	endpoint := userExistsEndpoint.Endpoint // /bq/user_exists
+	headers := c.setSnapchatHeaders(data)   // headers
+	params := map[string]string{
+		"username":         userExistsEndpoint.Params.Username,
+		"req_token":        userExistsEndpoint.Params.ReqToken,
+		"request_username": requestUsername,
+		"timestamp":        strconv.FormatInt(userExistsEndpoint.Params.Timestamp, 10),
+	}
+	s := Snapchat{
+		CasperClient: c,
+	}
+	scdata, err := s.performRequest("POST", endpoint, params, headers)
+	if err != nil {
+		return nil, err
+	}
+	return scdata, err
+}
+
+// FindFriends finds friends using a phone number from contacts.
+func (c *Casper) FindFriends(countryCode string, contacts map[string]string) ([]byte, error) {
+	err := c.checkToken()
+	if err != nil {
+		return nil, err
+	}
+	nums, err := json.Marshal(contacts)
+	if err != nil {
+		fmt.Println(err)
+	}
+	jwtform := map[string]string{
+		"username":   c.Username,
+		"auth_token": c.AuthToken,
+		"endpoint":   "/bq/find_friends",
+	}
+	token, err := c.signToken(jwtform)
+	if err != nil {
+		return nil, err
+	}
+	data, err := c.endpointAuth(token)
+	if err != nil {
+		return nil, err
+	}
+	findFriendsEndpoint := data.Endpoints[0] // upload endpoint data
+	endpoint := findFriendsEndpoint.Endpoint // /bq/find_friends
+	headers := c.setSnapchatHeaders(data)    // headers
+	params := map[string]string{
+		"username":    findFriendsEndpoint.Params.Username,
+		"req_token":   findFriendsEndpoint.Params.ReqToken,
+		"countryCode": countryCode,
+		"numbers":     string(nums),
+		"timestamp":   strconv.FormatInt(findFriendsEndpoint.Params.Timestamp, 10),
+	}
+	s := Snapchat{
+		CasperClient: c,
+	}
+	scdata, err := s.performRequest("POST", endpoint, params, headers)
+	if err != nil {
+		return nil, err
+	}
+	return scdata, err
+}
+
+// Friend provides friend functions add, delete, block, unblock and display all in one method.
+func (c *Casper) Friend(friend string, action string, nickname string) ([]byte, error) {
+	err := c.checkToken()
+	if err != nil {
+		return nil, err
+	}
+	actions := []string{"add", "delete", "block", "unblock", "display"}
+	var match = false
+	for _, a := range actions {
+		if action == a {
+			match = true
+		}
+	}
+	if match == false {
+		msg := errors.New("\"" + action + "\"  is not a valid friend action")
+		return nil, Error{"casper: error", msg}
+	}
+	jwtform := map[string]string{
+		"username":   c.Username,
+		"auth_token": c.AuthToken,
+		"endpoint":   "/bq/friend",
+	}
+	token, err := c.signToken(jwtform)
+	if err != nil {
+		return nil, err
+	}
+	data, err := c.endpointAuth(token)
+	if err != nil {
+		return nil, err
+	}
+	friendEndpoint := data.Endpoints[0]   // upload endpoint data
+	endpoint := friendEndpoint.Endpoint   // /bq/friend
+	headers := c.setSnapchatHeaders(data) // headers
+	params := map[string]string{
+		"username":  friendEndpoint.Params.Username,
+		"req_token": friendEndpoint.Params.ReqToken,
+		"action":    action,
+		"friend":    friend,
+		"timestamp": strconv.FormatInt(friendEndpoint.Params.Timestamp, 10),
+	}
+	if action == "display" {
+		params["display"] = nickname
+	}
+	s := Snapchat{
+		CasperClient: c,
+	}
+	scdata, err := s.performRequest("POST", endpoint, params, headers)
+	if err != nil {
+		return nil, err
+	}
+	return scdata, err
+}
+
+// BestFriends fetches best friends and scores on Snapchat.
+func (c *Casper) BestFriends(friends []string) ([]byte, error) {
+	err := c.checkToken()
+	if err != nil {
+		return nil, err
+	}
+	users, err := json.Marshal(friends)
+	if err != nil {
+		fmt.Println(err)
+	}
+	jwtform := map[string]string{
+		"username":   c.Username,
+		"auth_token": c.AuthToken,
+		"endpoint":   "/bq/bests",
+	}
+	token, err := c.signToken(jwtform)
+	if err != nil {
+		return nil, err
+	}
+	data, err := c.endpointAuth(token)
+	if err != nil {
+		return nil, err
+	}
+	bestsEndpoint := data.Endpoints[0]    // upload endpoint data
+	endpoint := bestsEndpoint.Endpoint    // /bq/bests
+	headers := c.setSnapchatHeaders(data) // headers
+	params := map[string]string{
+		"username":         bestsEndpoint.Params.Username,
+		"req_token":        bestsEndpoint.Params.ReqToken,
+		"friend_usernames": string(users),
+		"timestamp":        strconv.FormatInt(bestsEndpoint.Params.Timestamp, 10),
+	}
+	s := Snapchat{
+		CasperClient: c,
+	}
+	scdata, err := s.performRequest("POST", endpoint, params, headers)
+	if err != nil {
+		return nil, err
+	}
+	return scdata, err
 }
 
 // Logout logs the current use out of Snapchat.
