@@ -4,7 +4,7 @@
 [![GoDoc](https://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/hako/casper)
 ![CasperStatus](https://www.mgp25.com/cstatus/status.svg)
 
-casper is a small golang library for interacting with the Casper API and the Snapchat API.
+casper is a small Go library for interacting with the Casper API and the Snapchat API.
 
 # Installation
 `go get github.com/hako/casper`
@@ -88,8 +88,6 @@ See the [godoc](https://godoc.org/github.com/hako/casper) for more functions for
 ## Security
 
 This library requires you to have a Snapchat account.
-
-Placing API keys or any hardcoded sensitive information in Git is not recommended or advised!
 
 By using this library you also agree to the [Casper Terms of Use](http://clients.casper.io/terms.php).
 
