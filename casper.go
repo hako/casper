@@ -1233,11 +1233,13 @@ func (c *Casper) endpointAuth(token string) (SnapchatRequestModel, error) {
 // signToken produces a JWT token signed with HS256. (HMAC-SHA256)
 func (c *Casper) signToken(params map[string]string) (string, error) {
 	t := time.Now().Unix()
-	token := jwt.New(jwt.SigningMethodHS256)
-	token.Claims["iat"] = t
-	for k, v := range params {
-		token.Claims[k] = v
+	claims := jwt.MapClaims{
+		"iat": t,
 	}
+	for k, v := range params {
+		claims[k] = v
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	jwtString, err := token.SignedString([]byte(c.APISecret))
 	if err != nil {
 		return "", err
