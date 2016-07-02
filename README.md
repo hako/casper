@@ -4,18 +4,16 @@
 [![GoDoc](https://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/hako/casper)
 ![CasperStatus](https://www.mgp25.com/cstatus/status.svg)
 
-casper is a small golang library for interacting with the Casper API.
+casper is a small golang library for interacting with the Casper API and the Snapchat API.
 
 # Installation
 `go get github.com/hako/casper`
 
 ## Usage
 
-_Edit: The Casper API is currently not accepting any more registrations at this time. :(_
+You would need to register an account on the [Casper API portal](http://developers.casper.io/register.php) in order to use this library. Register an account and comeback to the README.
 
-<del>You would need to register an account on the [Casper API portal](https://clients.casper.io/register.php)</del> in order to use this library. Register an account and comeback to the README.
-
-_I won't disappear in 10 seconds :P_
+_Don't worry, I won't disappear in 10 seconds :P_
 
 Once you've registered an account and installed the library, to get started simply create a `Casper{}` struct and enter the following:
 
@@ -27,7 +25,11 @@ Once you've registered an account and installed the library, to get started simp
 
 + `Password` - your Snapchat password.
 
-`Debug` is optional and is set to false by default.
+`Debug` is optional and is set to `false` by default.
+
+`ProjectName` is optional and is empty by default.
+
+`AuthToken` is optional but is required for accessing authenticated endpoints.
 
 ## Example
 
@@ -35,37 +37,53 @@ Once you've registered an account and installed the library, to get started simp
 package main
 
 import (
-	"fmt"
-	"strconv"
-	"time"
-	
 	"github.com/hako/casper"
+	"fmt"
 )
 
-func main() {
+func main() {	
 	casperClient := &casper.Casper{
-		APIKey:    "yourapikey",
-		APISecret: "yourapisecret",
-		Username:  "yoursnapchatusername",
-		Password:  "yoursnapchatpassword",
-		Debug:     false,
+        APIKey:    "yourapikey",
+        APISecret: "yourapisecret",
 	}
-	timestamp := strconv.Itoa(int(time.Now().UnixNano() / 1000000))
-	
-	// Call any *casper.Casper methods
-	attestation, err := casperClient.GetAttestation(casperClient.Username, casperClient.Password, timestamp)
+	data, err := casperClient.Login("yoursnapchatusername", "yoursnapchatpassword")
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println("Attestation: " + attestation)
+	fmt.Println(data) // JSON
 }
+```
 
+Or if you already have an auth token...
+
+```go
+package main
+
+import (
+	"github.com/hako/casper"
+	"fmt"
+)
+
+func main() {	
+	casperClient := &casper.Casper{
+        APIKey:    "yourapikey",
+        APISecret: "yourapisecret",
+        Username:  "yoursnapchatusername",
+        AuthToken: "yoursnapchatauthtoken",
+	}
+	data, err := casperClient.Updates()
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(data) // JSON
+}
 ```
 
 See the [godoc](https://godoc.org/github.com/hako/casper) for more functions for interacting with the API.
 ## Todo
 - [ ] More tests.
 - [ ] Code cleanup.
+	- [ ] DRY cleanup.
 
 ## Security
 
